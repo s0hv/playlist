@@ -21,6 +21,9 @@ class Item(Base):
 
 class DatabaseHandler(object):
     def __init__(self):
+        if not os.path.isdir('../playlists'):
+            os.mkdir('../playlists')
+
         self.full, self.playing, self.onhold, self.saved, self.deleted = None, None, None, None, None # All the different databases
         self.engine_full, self.engine_onhold, self.engine_playing = None, None, None                  # DB engines
         self.list_size = 0             # The size of the playlist

@@ -49,6 +49,9 @@ with open("address.txt", 'w') as f:
 options = ChromeOptions()
 messaging_path = os.path.abspath(__file__ + '/../../Native messaging host/playlist app')
 options.add_argument("--load-extension=" + messaging_path)
+
+if not os.path.isdir('src/Extensions'):
+    os.mkdir('src/Extensions')
 # Add your extensions to the Extensions folder. Adblock is recommended
 extensions = os.listdir('Extensions')
 for extension in extensions:
