@@ -18,6 +18,8 @@ zmq `pip install pyzmq`
 
 [chrome](https://www.google.com/chrome/browser/desktop/index.html)
 
+system hotkey for keyboard hotkeys like next song/video `pip3 install system_hotkey`
+
 
 ## Optional things:
 
