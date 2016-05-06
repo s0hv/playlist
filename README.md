@@ -2,7 +2,7 @@
 
 This was created in python 3.4.4 and it's an early version so it will change a lot.
 
-Requirements (command prompt in brackets):
+## Requirements (command prompt in brackets):
 
 Python 3.4.4 or later
 
@@ -15,7 +15,7 @@ sqlalchemy (pip install SQLAlchemy)
 zmq (pip install pyzmq)
 
 
-optional:
+## Optional things:
 
 pillow (pip install pillow) this is for rainmeter cover art
 
