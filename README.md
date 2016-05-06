@@ -1,6 +1,6 @@
 # Custom-playlist
 
-This was created in python 3.4.4 and it's an early version so it will change a lot. 
+This was created in python 3.4.4 and it's an early version so it will change a lot. Chrome extensions (in crx form) go in the folder src/Extensions. I suggest you get adblock since ads might confuse the program
 
 ## Requirements:
 
