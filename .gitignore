@@ -10,3 +10,6 @@ output.txt
 
 # Cool files #
 test.py
+
+# Other #
+src/Extensions/*

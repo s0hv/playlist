@@ -58,7 +58,7 @@ driver = Chrome(chrome_options=options)
 driver.set_page_load_timeout(6)
 
 try:
-    p = subprocess.Popen('volume changer.exe')
+    p = subprocess.Popen('../Autoit script/volume changer.exe')
 except FileNotFoundError:
     p = None
 

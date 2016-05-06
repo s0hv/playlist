@@ -1,12 +1,16 @@
-from PIL import Image
-import configparser, os, subprocess, codecs, shutil, time
+import configparser, os, subprocess, codecs, shutil
+
+try:
+    from PIL import Image
+except ImportError:
+    Image = None
 
 
 class SetCoverArt(object):
 
     def __init__(self, skin_folder, rainmeter):
         self.counter = 1
-        if rainmeter is None or skin_folder is None:
+        if rainmeter is None or skin_folder is None or Image is None:
             self.counter = None
             return
         assert os.path.exists(skin_folder) and os.path.exists(rainmeter)
