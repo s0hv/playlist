@@ -22,7 +22,9 @@ zmq `pip install pyzmq`
 
 [chrome](https://www.google.com/chrome/browser/desktop/index.html)
 
-system hotkey for keyboard hotkeys like next song/video `pip3 install system_hotkey`
+system hotkey for keyboard hotkeys like next song/video `pip3 install system_hotkey`. This also requires [pywin32](https://sourceforge.net/projects/pywin32/files/pywin32/Build%20220/)
+
+If you are having problems with the system hotkey try [commenting out](https://gyazo.com/d992536c001ef3f7d28fac9c1c04f7d3) these lines (starting from 95) from the system_hotkey.py file
 
 
 ## Optional things:
