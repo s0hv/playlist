@@ -1,0 +1,104 @@
+import struct
+import sys
+import threading
+import zmq
+import time
+from multiprocessing import Queue, Manager, Process
+
+
+if sys.platform == "win32":
+    import os, msvcrt
+
+    msvcrt.setmode(sys.stdin.fileno(), os.O_BINARY)
+    msvcrt.setmode(sys.stdout.fileno(), os.O_BINARY)
+
+
+def send_message(message):
+    sys.stdout.write(struct.pack('I', len(message)).decode('utf-8'))
+    sys.stdout.write(message)
+    sys.stdout.flush()
+
+
+def read_thread_func(q, q2):
+    def check_q():
+        try:
+            command = q2.get_nowait()
+            if command == 'STOP':
+                return True
+        except:
+            pass
+    while True:
+        try:
+            text_length_bytes = sys.stdin.buffer.read(4)
+            text_length = struct.unpack('i', text_length_bytes)[0]
+            text = sys.stdin.buffer.read(text_length).decode('utf-8')
+            if check_q() is True:
+                return
+        except struct.error:
+            continue
+
+        q.put(text)
+        time.sleep(0.5)
+        if check_q() is True:
+            return
+
+
+def zmqFunc(q, q2):
+    context = zmq.Context()
+    socket = context.socket(zmq.REQ)
+    rcv = None
+    with open(r"C:\Users\Tariq\PycharmProjects\Playlist\src\address.txt", 'r') as f:
+        address = f.readline()
+    address = address.replace('*', 'localhost')
+    socket.connect(address)
+    socket.send_string('WORKING')
+    socket.recv_string()
+    while not q.empty():
+        try:
+            q.get_nowait()
+        except:
+            pass
+    while True:
+        if not q.empty():
+            msg = q.get_nowait()
+            socket.send_string(msg)
+            rcv = socket.recv_string()
+        if rcv == 'STOP':
+            q2.put('STOP')
+            q2.put('STOP')
+            socket.send_string('OK')
+            socket.recv_string()
+            socket.disconnect(address)
+            return None
+        time.sleep(1)
+
+
+def main():
+
+    manager = Manager()
+    q = manager.Queue()
+    q2 = manager.Queue()
+
+    zmqThread = Process(target=zmqFunc, args=(q, q2,))
+    zmqThread.start()
+
+    thread = threading.Thread(target=read_thread_func, args=(q, q2,))
+    thread.daemon = True
+    thread.start()
+
+    while True:
+        send_message('{"text": "get"}')
+        time.sleep(2)
+        try:
+            command = q2.get_nowait()
+            if command == 'STOP':
+                send_message('{"text": "ok"}')
+                thread.join()
+                zmqThread.join()
+                return None
+        except:
+            pass
+
+
+if __name__ == '__main__':
+    main()

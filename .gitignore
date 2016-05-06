@@ -1,0 +1,12 @@
+# All of my playlists #
+playlists/*
+*.db
+
+# Tracking new videos to add #
+New vid/
+
+# debugging #
+output.txt
+
+# Cool files #
+test.py
