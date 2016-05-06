@@ -13,3 +13,4 @@ test.py
 
 # Other #
 src/Extensions/*
+src/__pycache__/
