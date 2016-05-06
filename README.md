@@ -1,6 +1,6 @@
 # Custom-playlist
 
-This was created in python 3.4.4 and it's an early version so it will change a lot.
+This was created in python 3.4.4 and it's an early version so it will change a lot. 
 
 ## Requirements:
 
@@ -13,6 +13,10 @@ requests `pip install requests`
 sqlalchemy `pip install SQLAlchemy`
 
 zmq `pip install pyzmq`
+
+[chromedriver](https://sites.google.com/a/chromium.org/chromedriver/)
+
+[chrome](https://www.google.com/chrome/browser/desktop/index.html)
 
 
 ## Optional things:
