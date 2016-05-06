@@ -23,8 +23,4 @@ zmq `pip install pyzmq`
 
 pillow `pip install pillow` this is for rainmeter cover art
 
-<<<<<<< HEAD
 [autoit](https://www.autoitscript.com/site/) if you want to change the volume of chrome instance with keyboard keys. The file also needs to be compiled but it's prety easy with autoit.
-=======
-[autoit](https://www.autoitscript.com/site/) if you want to change the volume of chrome instance with keyboard keys. The file also needs to be compiled but it's prety easy with autoit.
->>>>>>> origin/master
