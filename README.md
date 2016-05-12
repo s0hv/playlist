@@ -32,3 +32,5 @@ If you are having problems with the system hotkey try [commenting out](https://g
 pillow `pip install pillow` this is for rainmeter cover art
 
 [autoit](https://www.autoitscript.com/site/) if you want to change the volume of chrome instance with keyboard keys. The file also needs to be compiled but it's prety easy with autoit.
+
+Volume changer also needs [NirCmd](http://www.nirsoft.net/utils/nircmd.html)
