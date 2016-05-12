@@ -150,10 +150,11 @@ def install_script():
         curr_url = driver.current_url
         if 'chrome-extension://' in curr_url:
             try:
-                elements = driver.find_elements_by_tag_name('input')
+                elements = driver.find_elements_by_tag_name('button')
                 for e in elements:
-                    if e.get_attribute('value') == 'Install':
+                    if e.find_element_by_tag_name('span').text == 'Install':
                         e.click()
+                        time.sleep(2)
                         break
             except NoSuchElementException:
                 pass
@@ -209,14 +210,14 @@ def del_or_save(save):
     database.save_or_delete(item, save)
 
 
-# Does not do anything
+# Does not start next song until unpaused
 def pause_list():
     global pause
     pause = not pause
 
 # Set hotkeys
 hk = SystemHotkey()
-hotkeys = [('next', lambda e: callback()), ('stop', lambda e:exit_chrome()), ('delete', lambda e: del_or_save(False)), ('save', lambda e: del_or_save(True))]
+hotkeys = [('next', lambda e: callback()), ('stop', lambda e:exit_chrome()), ('delete', lambda e: del_or_save(False)), ('save', lambda e: del_or_save(True)), ('pause', lambda e: pause_list())]
 for key in hotkeys:
     try:
         hotkey = config.configparser.get('Hotkeys', key[0])
@@ -231,6 +232,9 @@ close_windows(driver.current_url)
 driver.switch_to.window(driver.window_handles[0])
 driver.set_page_load_timeout(15)
 
+#driver.get('https://www.google.com')
+#install_script()
+#driver.switch_to.window(driver.window_handles[0])
 msg = socket.recv_string()
 socket.send_string('OK')
 next_vid()
@@ -246,14 +250,21 @@ while running:
         pass
     if msg =='OK':
         break
+
+    while pause:
+        socket.recv_string(flags=1)
+        socket.send_string(message)
+
     wrk = 0
     working = False
     no_sound = 0
     video_playing = True
+
     t = time.time()
     if start is not None and start >= 0:
         print('wait time:', start)
         sound_check = 2
+
         while time.time() - t < start:
             try:
                 msg = socket.recv_string(flags=1)
@@ -268,15 +279,19 @@ while running:
                 time.sleep(4)
                 driver.quit()
                 break
+
     else:
         sound_check = 10
+
     while video_playing:
         time.sleep(0.5)
+
         try:
             msg = socket.recv_string(flags=1)
             socket.send_string(message)
         except:
             continue
+
         if msg == 'OK':
             time.sleep(4)
             driver.quit()
@@ -289,17 +304,23 @@ while running:
         if msg == '"true"' and not working:
             if wrk >= 2:
                 working = True
+
                 if override_start or (auto_set_start and start is None or start < 0):
                     sound_check = no_sound + 2
                     print('time:', int(time.time() - t) - 2)
                     database.update_start(item, int(time.time() - t) - 2)
+
             wrk += 1
+
         if msg == '"false"':
             no_sound += 1
+
             if no_sound > sound_check:
                 if wrk < 2:
                     print('Not working:', wrk)
+
                 if not working:
                     not_working()
+
                 next_vid()
                 break
