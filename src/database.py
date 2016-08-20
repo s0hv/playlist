@@ -5,7 +5,7 @@ from sqlalchemy import Integer, Column, String, INTEGER
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from src import config as cfg
-import random, math, os
+import random, math, os, itertools
 
 Base = declarative_base()
 
@@ -16,7 +16,9 @@ class Item(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String)
     link = Column(String)
-    start = Column(INTEGER, default=-1) # The length of the video in seconds. If 0 the program will automatically assign one when the video is played.
+    start = Column(INTEGER, default=-1)  # The length of the video in seconds.
+    # If 0 or less the program will automatically assign one when the video is played.
+    play_times = Column(INTEGER, default=0)  # How many times the video has been played
 
 
 class DatabaseHandler(object):
@@ -24,17 +26,21 @@ class DatabaseHandler(object):
         if not os.path.isdir('../playlists'):
             os.mkdir('../playlists')
 
-        self.full, self.playing, self.onhold, self.saved, self.deleted = None, None, None, None, None # All the different databases
-        self.engine_full, self.engine_onhold, self.engine_playing = None, None, None                  # DB engines
-        self.list_size = 0             # The size of the playlist
-        self.not_working = None        # Another database
-        self.wd = None                 # Working dir
-        self.config = cfg.Config()     # The config handler
+        # All the different databases. Not sure if it's good to initialize them now though
+        self.full, self.playing, self.onhold, self.saved, self.deleted = None, None, None, None, None
+        self.engine_full, self.engine_onhold, self.engine_playing = None, None, None  # DB engines
+        self.list_size = 0  # The size of the playlist
+        self.not_working = None  # Another database that stores songs that might not work
+        self.wd = None  # Working dir
+        self.config = cfg.Config()  # The config handler
 
     # Set the active database
-    def set_database(self, path, create=False, name=None):
+    def set_database(self, path=None, create=False, name=None):
         if name is not None:
             path = self.config.configparser.get('Playlists', name)
+        elif path is None:
+            print("No database specified in the parameters")
+
         self.wd = path
         print('%splaylist.db' % path)
         self.engine_full = create_engine('sqlite:///%splaylist.db' % path)  # , echo=True)
@@ -45,16 +51,18 @@ class DatabaseHandler(object):
         Session2 = sessionmaker()
         Session3 = sessionmaker()
 
+        # Create new database with the provided information
         if create:
             try:
                 if not os.path.exists(path):
                     os.mkdir(path)
             except WindowsError:
                 return False
-            Base.metadata.create_all(self.engine_full)
-            Base.metadata.create_all(self.engine_playing)
-            Base.metadata.create_all(self.engine_onhold)
+            Item.metadata.create_all(self.engine_full)
+            Item.metadata.create_all(self.engine_playing)
+            Item.metadata.create_all(self.engine_onhold)
 
+        # Force UTF-8 encoding
         self.engine_full.execute('PRAGMA encoding = "UTF-8"')
         self.engine_playing.execute('PRAGMA encoding = "UTF-8"')
         self.engine_onhold.execute('PRAGMA encoding = "UTF-8"')
@@ -68,6 +76,7 @@ class DatabaseHandler(object):
         self.playing = Session2()
         self.onhold = Session3()
 
+        # Set how many items should be in the playing.db.
         self.list_size = math.ceil(
             len(list(self.full.query(Item))) * self.config.configparser.getfloat('List Options', 'playing_size'))
         print(self.list_size)
@@ -80,8 +89,8 @@ class DatabaseHandler(object):
         idx = 1
 
         for item in items:
-            id = item.id
-            if id != idx:
+            row_id = item.id
+            if row_id != idx:
                 if not multiple:
                     return idx
                 else:
@@ -95,29 +104,30 @@ class DatabaseHandler(object):
 
     def check_size(self):
         size = len(list(self.playing.query(Item)))
-        value = False
 
         if size <= self.list_size:
-            value = True
-        print(size, value)
-        return value
+            return True
+        return False
 
     # Get a random item from the playlist
     @staticmethod
     def get_random(session):
         q = list(session.query(Item))
-        return random.choice(q[0:math.ceil(len(q)*0.25)])
+        items = q[0:math.ceil(len(q) * 0.25)]
+        sorted(items, key=lambda i: (i.play_times is not None, i))
+        sorted_items = [x for x in items if x.play_times == items[0].play_times]
+        return random.choice(sorted_items)
 
-    # Create the item to an avaible id slot
-    def create_item(self, name, link, session, start=-1):
-        item = Item(link=link, name=name, start=start)
+    # Create the item to an available id slot
+    def create_item(self, name, link, session, start=-1, play_times=0):
+        item = Item(link=link, name=name, start=start, play_times=play_times)
         i = self.get_id(session)
         if i is not None:
             item.id = i
         return item
 
     # Uses create_item to add an item to a database. Does not commit anything
-    def add_item(self, session, item=None, name='', link=''):
+    def _add_item(self, session, item=None, name='', link=''):
         if item is None:
             if link == '':
                 return False
@@ -126,8 +136,8 @@ class DatabaseHandler(object):
 
     # Delete item by id
     @staticmethod
-    def delete(engine, id):
-        engine.execute('DELETE FROM playlist where ID = ' + str(id))
+    def delete(engine, row_id):
+        engine.execute('DELETE FROM playlist where ID = ' + str(row_id))
 
     # Checks if everything is OK
     def check_integrity(self):
@@ -149,8 +159,8 @@ class DatabaseHandler(object):
         assert self.playing is not None, "No database selected"
 
         row = self.get_random(self.playing)
-        item = Item(link=row.link, name=row.name, start=row.start)
-        print(str(item.link), str(item.name))
+        item = Item(link=row.link, name=row.name, start=row.start, play_times=row.play_times)
+        print(str(item.link), str(item.name), str(item.play_times))
         self.playing.delete(row)
         self.onhold.add(item)
 
@@ -158,17 +168,14 @@ class DatabaseHandler(object):
             items = list(self.onhold.query(Item))
             items = items[0:math.ceil(len(items) * 0.25)]
             row2 = random.choice(items)
-            self.playing.add(Item(name=row2.name, link=row2.link, start=row2.start))
+            self.playing.add(Item(name=row2.name, link=row2.link, start=row2.start, play_times=row2.play_times))
             self.onhold.delete(row2)
 
         self.playing.commit()
         self.onhold.commit()
         return row
 
-    def add_not_working(self, item, delete=False):
-        if self.wd is None:
-            return
-
+    def connect_not_working(self):
         if self.not_working is None:
             engine_notworking = create_engine('sqlite:///%splaylist_notworking.db' % self.wd)
             Session4 = sessionmaker()
@@ -176,50 +183,15 @@ class DatabaseHandler(object):
             Session4.configure(bind=engine_notworking)
             self.not_working = Session4()
 
-        link = item.link
-        name = item.name
-        itm = (Item(name=name, link=link, start=item.start))
-        self.not_working.add(itm)
-        self.not_working.commit()
+    def connect_saved(self):
+        if self.saved is None:
+            engine_saved = create_engine('sqlite:///%splaylist_saved.db' % self.wd)
+            Session5 = sessionmaker()
+            Base.metadata.create_all(engine_saved)
+            Session5.configure(bind=engine_saved)
+            self.saved = Session5()
 
-        if delete and self.full is not None:
-            self.onhold.delete(self.onhold.query(Item).filter_by(link=link, name=name).first())
-            self.full.delete(self.full.query(Item).filter_by(link=link, name=name).first())
-            self.full.commit()
-            self.onhold.commit()
-        return True
-
-    # Do set delete_item to True when the playlist is not running
-    # TODO delete_item
-    def save_or_delete(self, item, save: bool, delete_item=False):
-        item = Item(link=item.link, name=item.name, start=item.start)
-
-        if save:
-            if self.saved is None:
-                engine_saved = create_engine('sqlite:///%splaylist_saved.db' % self.wd)
-                Session5 = sessionmaker()
-                Base.metadata.create_all(engine_saved)
-                Session5.configure(bind=engine_saved)
-                self.saved = Session5()
-            self.saved.add(item)
-            self.saved.commit()
-
-        elif not save:
-            if self.deleted is None:
-                engine_deleted = create_engine('sqlite:///%splaylist_deleted.db' % self.wd)
-                Session6 = sessionmaker()
-                Base.metadata.create_all(engine_deleted)
-                Session6.configure(bind=engine_deleted)
-                self.deleted = Session6()
-            self.deleted.add(item)
-            self.deleted.commit()
-
-    def delete_items(self):
-        assert self.check_integrity() is True, "Playlist might be corrupted. Aborting"
-
-        if self.full is None:
-            return
-
+    def connect_deleted(self):
         if self.deleted is None:
             engine_deleted = create_engine('sqlite:///%splaylist_deleted.db' % self.wd)
             Session6 = sessionmaker()
@@ -227,35 +199,94 @@ class DatabaseHandler(object):
             Session6.configure(bind=engine_deleted)
             self.deleted = Session6()
 
-        self.deleted.commit()
-        items = self.deleted.query(Item)
+    # Connect to all databases if it hasn't been done yet
+    def connect_others(self):
+        if self.wd is None:
+            print("Not connected to a database")
+            return
+
+        self.connect_not_working()
+        self.connect_deleted()
+        self.connect_saved()
+
+    def add_not_working(self, item):
+        if self.wd is None:
+            return
+
+        self.connect_not_working()
+
+        link = item.link
+        name = item.name
+        itm = (Item(name=name, link=link, start=item.start))
+        self.not_working.add(itm)
+        self.not_working.commit()
+
+        return True
+
+    # Do set delete_item to True when the playlist is not running
+    # TODO delete_item
+    def save_or_delete(self, item: Item, save: bool, delete_item: bool = False):
+        item = Item(link=item.link, name=item.name, start=item.start, play_times=item.play_times)
+
+        if save:
+            self.connect_saved()
+            self.saved.add(item)
+            self.saved.commit()
+
+        elif not save:
+            self.connect_deleted()
+            self.deleted.add(item)
+            self.deleted.commit()
+
+            if delete_item:
+                self.delete_items(item)
+
+    # Deletes the list or query of items from.
+    def delete_items(self, items=None):
+        assert self.check_integrity() is True, "Playlist might be corrupted. Aborting"
+
+        if items is None:
+            print("No items given.")
+            return
+
+        if self.full is None:
+            return
+
         full_query = self.full.query(Item)
         onhold_query = self.onhold.query(Item)
         playing_query = self.playing.query(Item)
 
+        amount = len(list(full_query))
+        deleted_items = 0
+
+        # TODO remove items from all available databases
         for item in items:
-            self.deleted.delete(item)
             self.full.delete(full_query.filter_by(link=item.link, name=item.name).first())
-            if self.onhold.delete(onhold_query.filter_by(link=item.link, name=item.name).first()) is None:
-                assert self.playing.delete(playing_query.filter_by(link=item.link,
-                                                                   name=item.name).first()) is not None, "Item not found in playlists. Playlist might be corrupted"
-        # TODO committing the changes
+            delete = onhold_query.filter_by(link=item.link, name=item.name).first()
+            if delete is None:
+                delete = playing_query.filter_by(link=item.link, name=item.name).first()
+                assert delete is not None, "Item not found in playlists. Playlist might be corrupted"
+                self.playing.delete(delete)
+            else:
+                self.onhold.delete(delete)
+
+            deleted_items += 1
+            print("Deleted:", item.name, item.link)
+
+        self.full.commit()
+        self.onhold.commit()
+        self.playing.commit()
+
+        print("Successfully deleted", str(deleted_items) + "/" + str(amount))
 
     @staticmethod
-    # Just returns a new set of items
-    def recreate_db(database):
-        items = database.query(Item)
-        new_items = []
-        for item in items:
-            name, link, start = item.name, item.link, item.start
-            new_items += Item(name=name, link=link, start=start)
-        return new_items
-
-    # Copies a DB to another DB.
-    def add_from_db(self, source, target, merge=False, duplicates=False):
-        source
+    # Merges a DB to another DB.
+    def add_from_db(self, source, target, duplicates=False):
+        print("Too lazy to finish this.")
+        return
         # TODO Everything
 
+    # Runs the commit command for all databases
     def commit_all(self):
         self.playing.commit()
         self.full.commit()
@@ -267,8 +298,18 @@ class DatabaseHandler(object):
         if self.saved is not None:
             self.saved.commit()
 
+    # Pretty self explanatory
+    def add_new_item(self, link, name):
+        item = Item(link=link, name=name)
+        item2 = Item(link=link, name=name)
+        self.full.add(item)
+        self.full.commit()
+        self.playing.add(item2)
+        self.playing.commit()
+
     # TODO A function that resets the id values of the selected DB since the id grows all the time
 
+    # Changes the start if an item to the one specified in the parameter start
     def update_start(self, item, start):
         f = self.full.query(Item).filter_by(link=item.link, name=item.name)
         o = self.onhold.query(Item).filter_by(link=item.link, name=item.name)
@@ -276,12 +317,38 @@ class DatabaseHandler(object):
         if len(list(o)) == 0 and len(list(p)) == 0:
             return False
 
+        # Changes the start time for all matching items in all three databases
         for i in f:
             i.start = start
         for i in o:
             i.start = start
         for i in p:
             i.start = start
+
+        self.full.commit()
+        self.playing.commit()
+        self.onhold.commit()
+
+    # Add 1 to the amount of times the video/song has been played
+    def add_playing_times(self, item):
+        f = self.full.query(Item).filter_by(link=item.link, name=item.name)
+        o = self.onhold.query(Item).filter_by(link=item.link, name=item.name)
+        p = self.playing.query(Item).filter_by(link=item.link, name=item.name)
+
+        # If no item is found in playing or onhold there's a problem with your db
+        assert len(list(o)) > 0 or len(list(p)) > 0, "No item found"
+
+        # If item is not found in onhold it must be in playing
+        if len(list(o)) == 0:
+            o = p
+
+        for i, ii in zip(f, o):
+            if i.play_times is None:
+                i.play_times = 1
+                ii.play_times = 1
+            else:
+                i.play_times += 1
+                ii.play_times += 1
 
         self.full.commit()
         self.playing.commit()
