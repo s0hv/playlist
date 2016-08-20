@@ -14,3 +14,7 @@ test.py
 # Other #
 src/Extensions/*
 src/__pycache__/
+
+# No need to update #
+globals.py
+config.ini
