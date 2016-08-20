@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import os, sys, codecs, time, subprocess, threading, requests
+import os, sys, codecs, time, subprocess, requests
+
 # Set path directory so it can recognize modules from src
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 sys.stdout = codecs.getwriter("utf-8")(sys.stdout.detach())
@@ -66,27 +67,27 @@ except FileNotFoundError:
     p = None
 
 
-cover = SetCoverArt(RADIAN, RAINMETER) # Cover changer
+cover = SetCoverArt(RADIAN, RAINMETER)  # Cover changer
 
 thumbnails = ['http://img.youtube.com/vi/%s/maxresdefault.jpg', 'http://img.youtube.com/vi/%s/hqdefault.jpg', 'http://img.youtube.com/vi/%s/0.jpg'] # Thumbnail urls
 
 # Select playlist
 database = db.DatabaseHandler()
-database.set_database(None, name=DATABASE) # Currently selected database
+database.set_database(None, name=DATABASE)  # Currently selected database
 
-nx = False # If true song/video will change. Used by  callback()
-item = None # The current item being played. See Item class in database.py for info
-working = False # If True the video is working
-wrk = 0 # Counter to check if the video is working
-no_sound = 0 # Sound output check
-running = True # Keeps the main loop running
-pause = False # TODO: make a pause function
-start = 0 # How long the song takes to start
-stop = False # When true the program will initiate shutdown
+nx = False  # If true song/video will change. Used by  callback()
+item = None  # The current item being played. See Item class in database.py for info
+working = False  # If True the video is working
+wrk = 0  # Counter to check if the video is working
+no_sound = 0  # Sound output check
+running = True  # Keeps the main loop running
+pause = False  # Pauses the playlist after the current song is finished
+start = 0  # How long the song takes to start
+stop = False  # When true the program will initiate shutdown
 
-auto_set_start = True # Set start time automatically if it is None or smaller than zero
-override_start = False # Creates new start times all the time
-thread = None # Thread that set cover art
+auto_set_start = True  # Set start time automatically if it is None or smaller than zero
+override_start = False  # Creates new start times all the time
+thread = None  # Thread that set cover art
 message = 'OK'
 
 
@@ -102,7 +103,7 @@ def cover_configuration():
         if idx < 2:
             pass
         else:
-            id = query[idx:idx+11]
+            id = query[idx:idx + 11]
             try:
                 cover.set_coverart(item.name, 'Youtube', get_hqthumbnail(id))
                 return
@@ -112,9 +113,9 @@ def cover_configuration():
 
 
 # Get Youtube thumbnail in the best quality possible with no API
-def get_hqthumbnail(id):
+def get_hqthumbnail(yt_id):
     for tn in thumbnails:
-        r = requests.get(tn % id, stream=True)
+        r = requests.get(tn % yt_id, stream=True)
         if r.status_code != 404:
             return r.raw
 
@@ -143,7 +144,7 @@ def close_windows(url):
 # Install age verification bypass for Youtube
 def install_script():
     driver.get('https://openuserjs.org/install/tfr/Bypass_YouTube_age_verification.user.js')
-    time.sleep(1)
+    time.sleep(3)
     handles = driver.window_handles
     for handle in handles:
         driver.switch_to.window(handle)
@@ -169,17 +170,26 @@ def callback():
 
 # Change to next video/song
 def next_vid():
-    global item, start,thread
+    global item, start, thread
+    print('')
     if thread is not None:
         thread.join()
+
+    while pause:
+        try:
+            socket.recv_string(flags=1)
+            socket.send_string(message)
+        except:
+            pass
+
     item = database.choice()
     start = item.start
-    played.add(Item(name=item.name, link=item.link, start=start))
+    played.add(Item(name=item.name, link=item.link, start=start, play_times=item.play_times))
     played.commit()
     try:
         driver.get(item.link)
-        thread = threading.Thread(target=cover_configuration)
-        thread.start()
+        #thread = threading.Thread(target=cover_configuration)
+        #thread.start()
     except TimeoutException:
         if not os.path.exists(item.link):
             next_vid()
@@ -232,9 +242,9 @@ close_windows(driver.current_url)
 driver.switch_to.window(driver.window_handles[0])
 driver.set_page_load_timeout(15)
 
-#driver.get('https://www.google.com')
-#install_script()
-#driver.switch_to.window(driver.window_handles[0])
+driver.get('https://www.google.com')
+install_script()
+driver.switch_to.window(driver.window_handles[0])
 msg = socket.recv_string()
 socket.send_string('OK')
 next_vid()
@@ -242,18 +252,19 @@ next_vid()
 # Main loop that does everything
 while running:
     time.sleep(0.3)
+
+    flush_time = time.time()
     try:
         while True:
             socket.recv_string(flags=1)
             socket.send_string(message)
+            time.sleep(0.1)
     except:
         pass
+    print("Emptied queue in", str(time.time()-flush_time))
+
     if msg =='OK':
         break
-
-    while pause:
-        socket.recv_string(flags=1)
-        socket.send_string(message)
 
     wrk = 0
     working = False
@@ -263,26 +274,32 @@ while running:
     t = time.time()
     if start is not None and start >= 0:
         print('wait time:', start)
-        sound_check = 2
+        sound_check = 4
 
         while time.time() - t < start:
+            time.sleep(0.3)
             try:
                 msg = socket.recv_string(flags=1)
+
                 if msg == 'NEXT':
                     socket.send_string(message)
                     next_vid()
                     break
                 socket.send_string(message)
+
             except:
                 continue
+
             if msg == 'OK':
                 time.sleep(4)
                 driver.quit()
                 break
 
     else:
-        sound_check = 10
+        sound_check = 20
+    print("Waited a total of", str(time.time() - t), "seconds.")
 
+    start_time = time.time()
     while video_playing:
         time.sleep(0.5)
 
@@ -296,16 +313,19 @@ while running:
             time.sleep(4)
             driver.quit()
             break
+
         if nx or msg == 'NEXT':
             print('wrk:', wrk, 'no sound:', no_sound)
+            print("Played the current song for a total of", str(time.time() - start_time), "seconds.")
             next_vid()
             nx = False
             break
-        if msg == '"true"' and not working:
-            if wrk >= 2:
-                working = True
 
-                if override_start or (auto_set_start and start is None or start < 0):
+        if msg == '"true"' and not working:
+            if wrk >= 3:
+                working = True
+                database.add_playing_times(item)
+                if override_start or (auto_set_start and start is None) or start < 0:
                     sound_check = no_sound + 2
                     print('time:', int(time.time() - t) - 2)
                     database.update_start(item, int(time.time() - t) - 2)
@@ -321,6 +341,7 @@ while running:
 
                 if not working:
                     not_working()
-
+                
+                print("Played the current song for a total of", str(time.time() - start_time), "seconds.")
                 next_vid()
                 break
