@@ -137,10 +137,9 @@ class ReadFromFile(Frame):
         self.Label12.place(relx=0.02, rely=0.19, height=21, width=88)
         self.Label12.configure(text="Link formatting (optional)")
 
-        self.link_part1 = Entry(self, fg='grey')
+        self.link_part1 = Entry(self)
         self.link_part1.place(relx=0.02, rely=0.28, relheight=0.06, relwidth=0.37)
-        self.link_part1.insert(0, "Start of the link here")
-        self.link_part1.bind('<Button-1>', lambda event: greytext(self.link_part1))
+        self.link_part1.insert(0, "https://www.youtube.com/watch?v=")
 
         self.link_part2 = Entry(self, fg='grey')
         self.link_part2.place(relx=0.02, rely=0.36, relheight=0.06, relwidth=0.37)
@@ -148,12 +147,12 @@ class ReadFromFile(Frame):
         self.link_part2.bind('<Button-1>', lambda event: greytext(self.link_part2))
 
     def fopen(self):
-        filename = askopenfilename()
-        if filename == '':
+        self.filename = askopenfilename()
+        if self.filename == '':
             return
         self.items.clear()
         self.items_text.delete(1.0, 'end')
-        with open(filename, encoding='utf-8-sig') as f:
+        with open(self.filename, encoding='utf-8-sig') as f:
             lines = f.read().splitlines()
 
         delim = self.delimeter.get()
@@ -167,8 +166,7 @@ class ReadFromFile(Frame):
                 s, e = self.get_link_formatting()
                 link = s + link + e
                 self.items += [(link, name)]
-                self.items_text.insert('end', ("name: " + name + "\nlink: " +
-                                               link + '\n\n'))
+                self.items_text.insert('end', ("name: " + name + "\nlink: " + link + '\n\n'))
             except ValueError:
                 print("Something went wrong: ", line)
 
@@ -190,9 +188,18 @@ class ReadFromFile(Frame):
         self.link_first = not self.link_first
 
     def commit(self):
+        amount = len(self.items)
+        failed = 0
         for item in self.items:
-            self.controller.add_item(item[0], item[1])
-        print('Items added')
+            try:
+                self.controller.add_item(item[0], item[1])
+                print('Added ' + item[1] + ', ' + item[0])
+            except:
+                failed += 0
+        print(str(amount - failed) + '/' + str(amount) + ' Items added')
+        response = input("Do you want to empty the contents of the file used (Y/N)")
+        if response.lower() == "y" or "yes":
+            open(self.filename, 'w').close()
 
 
 class AddManually(Frame):
